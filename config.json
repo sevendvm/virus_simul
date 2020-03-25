@@ -1,0 +1,45 @@
+{
+    "TotalPopulation"       : 1000000,
+    "HealthcareCapacity"    : 7000,
+    "TotalQuarantineTreshold": 3,
+ 
+    "BaseContagiousness"    : 0.5,
+    "TransitionRate"        : 50,
+    "GrayPeriod"            : 5,
+    
+    "SeverityLevelsDistribution": {
+        "Critical" : 4,
+        "Severe"   : 10,
+        "Mild"     : 56,
+        "Low"      : 30
+    },
+    
+    "InfectionRate"         : 70,
+    
+    "MortalityRate"         : 4,
+    "MortalityOfAgeGroups": {
+        "9" : 0.0,
+        "39": 0.2,
+        "49": 0.4,
+        "59": 1.3,
+        "69": 3.6,
+        "79": 8.0,
+        "99": 14.8
+    },
+    
+    "SelfIsolationRate"       : 20,
+    "SelfIsolationStrictness" : 80,
+       
+    "MaximumTravelRange"     : 5,
+    "MaximumContactsPerDay"  : 20,
+    "ContactsPerDayModifier" : {
+        "Asymptomatic"    : 1.0,
+        "Symptomatic"     : 0.5,
+        "Hospitalization" : 0.06,
+        "ICU"             : 0.01,
+        "Recovered"       : 1.0
+    },
+    
+    "SelfRecoveryRate"      : 30,
+    "DaysBeforeSelfRecovery": 5
+}
