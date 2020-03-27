@@ -36,6 +36,7 @@ func newpersonStates() *personStates {
 	}
 }
 
+// FIXME: see type severityLevelDistribution map[string]int
 type sicknessSeverityLevels struct {
 	Low      int // 30% NS (asymptomatic) / Recovery
 	Mild     int // 56% 5D NS / 5-6D Symptomatic / Recovery
@@ -52,7 +53,10 @@ func newsicknessSeverityLevels() *sicknessSeverityLevels {
 	}
 }
 
-// TODO: add new parameters to struct
+type severityLevelDistribution map[string]int
+type contactsPerDayModifiers map[string]float64
+type mortalityAmongAgeGroups map[int]float64
+
 type mainParametersStruct struct {
 	TotalPopulation         int
 	InfectionRate           int
@@ -67,6 +71,9 @@ type mainParametersStruct struct {
 	SelfIsolationRate       int
 	SelfIsolationStrictness int
 	TotalQuarantineTreshold int
+	severityLevelDistribution
+	contactsPerDayModifiers
+	mortalityAmongAgeGroups
 }
 
 func readJSON(fn string, v interface{}) {
@@ -197,6 +204,32 @@ func removeSick(pArray []personID, index int) []personID {
 
 func main() {
 	mainParameters = mainParametersStruct{}
+	//FIXME: resolve potential descriptive parameter doubling
+	mainParameters.severityLevelDistribution = make(severityLevelDistribution)
+	mainParameters.severityLevelDistribution["Critical"] = 4
+	mainParameters.severityLevelDistribution["Severe"] = 10
+	mainParameters.severityLevelDistribution["Mild"] = 56
+	mainParameters.severityLevelDistribution["Low"] = 30
+
+	mainParameters.contactsPerDayModifiers = make(contactsPerDayModifiers)
+	mainParameters.contactsPerDayModifiers[personState.Healthy] = 1.0
+	mainParameters.contactsPerDayModifiers[personState.Recovered] = 1.0
+	mainParameters.contactsPerDayModifiers[personState.Susceptible] = 0.5
+	mainParameters.contactsPerDayModifiers[personState.Ill] = 0.5
+	mainParameters.contactsPerDayModifiers[personState.Infected] = 0.5
+	mainParameters.contactsPerDayModifiers[personState.UnderTreatment] = 0.06
+	mainParameters.contactsPerDayModifiers[personState.ICU] = 0.01
+	mainParameters.contactsPerDayModifiers[personState.Dead] = 0.0
+
+	mainParameters.mortalityAmongAgeGroups = make(mortalityAmongAgeGroups)
+	mainParameters.mortalityAmongAgeGroups[9] = 0.0
+	mainParameters.mortalityAmongAgeGroups[39] = 0.2
+	mainParameters.mortalityAmongAgeGroups[49] = 0.4
+	mainParameters.mortalityAmongAgeGroups[59] = 1.3
+	mainParameters.mortalityAmongAgeGroups[69] = 3.6
+	mainParameters.mortalityAmongAgeGroups[79] = 8.0
+	mainParameters.mortalityAmongAgeGroups[99] = 14.8
+
 	readJSON("config.json", &mainParameters)
 
 	//FIXME: find out how to set a range dynamically
