@@ -1,7 +1,17 @@
 {
     "TotalPopulation"       : 1000000,
+    "BaseHospitality"       : 20,
+
+    "AgeGroupsDensity"      : {
+        "10" : 3,
+        "25" : 16,
+        "40" : 48,
+        "75" : 87,
+        "100": 100
+    },
+
     "HealthcareCapacity"    : 7000,
-    "TotalQuarantineTreshold": 3,
+    "TotalQuarantineTreshold": 5,
  
     "BaseContagiousness"    : 0.5,
     "TransitionRate"        : 50,

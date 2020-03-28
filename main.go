@@ -53,27 +53,32 @@ func newsicknessSeverityLevels() *sicknessSeverityLevels {
 	}
 }
 
+type ageGroupsDensityParameters struct{ upperBound, density int }
+
 type severityLevelDistribution map[string]int
 type contactsPerDayModifiers map[string]float64
 type mortalityAmongAgeGroups map[int]float64
+type ageGroupsDensity [5]ageGroupsDensityParameters
 
 type mainParametersStruct struct {
-	TotalPopulation         int
-	InfectionRate           int
-	TransitionRate          int
-	MortalityRate           int
-	MaximumContactsPerDay   int
-	MaximumTravelRange      int
-	GrayPeriod              int
-	SelfRecoveryRate        int
-	DaysBeforeSelfRecovery  int
-	HealthcareCapacity      int
-	SelfIsolationRate       int
-	SelfIsolationStrictness int
-	TotalQuarantineTreshold int
+	TotalPopulation                int
+	InfectionRate                  int
+	TransitionRate                 int
+	MortalityRate                  int
+	MaximumContactsPerDay          int
+	MaximumTravelRange             int
+	GrayPeriod                     int
+	SelfRecoveryRate               int
+	DaysBeforeSelfRecovery         int
+	HealthcareCapacity             int
+	SelfIsolationRate              int
+	SelfIsolationStrictness        int
+	TotalQuarantineAppliedTreshold int
+	BaseHospitality                int
 	severityLevelDistribution
 	contactsPerDayModifiers
 	mortalityAmongAgeGroups
+	ageGroupsDensity
 }
 
 func readJSON(fn string, v interface{}) {
@@ -101,20 +106,22 @@ type citizen struct {
 	personID              //person's Digital Passport :)
 }
 
-const populationSpaceDimension = 5
+const populationSpaceDimension = 500
 
 type populationType [populationSpaceDimension][populationSpaceDimension]citizen
 
 type globalStatsStruct struct {
-	totalInfected     int
-	totalRecovered    int
-	totalIll          int
-	totalDead         int
-	totalIntact       int
-	totalSelfIsolated int
-	currentMortality  int
-	daysCount         int
-	totalQuarantine   bool
+	totalInfected          int
+	totalRecovered         int
+	totalIll               int
+	totalDead              int
+	totalIntact            int
+	totalSelfIsolated      int
+	totalHospitalized      int
+	totalICU               int
+	currentMortality       int
+	daysCount              int
+	totalQuarantineApplied bool
 }
 
 var globalStats globalStatsStruct
@@ -186,6 +193,72 @@ func (p *populationType) getContacted(referencePerson citizen, radius, maximumCo
 	return neighboursArray
 }
 
+func (p *populationType) growAYear() {
+	for i := 0; i < populationSpaceDimension; i++ {
+		for j := 0; j < populationSpaceDimension; j++ {
+			if p[i][j].state != personState.Dead {
+				p[i][j].age++
+			}
+		}
+	}
+}
+
+func (p *populationType) tickNextDay() {
+	for i := 0; i < populationSpaceDimension; i++ {
+		for j := 0; j < populationSpaceDimension; j++ {
+			if p[i][j].state != personState.Dead {
+				p[i][j].daysInState++
+			}
+		}
+	}
+}
+
+func (p *populationType) initialize() {
+
+	s1 := rand.NewSource(time.Now().UnixNano())
+	r1 := rand.New(s1)
+	r2 := rand.New(s1)
+
+	for i := 0; i < populationSpaceDimension; i++ {
+		for j := 0; j < populationSpaceDimension; j++ {
+			p[i][j] = citizen{
+				state:            personState.Healthy,
+				personID:         personID{i, j},
+				hospitality:      r1.Intn(100) + mainParameters.BaseHospitality,
+				sicknessSeverity: r1.Intn(4),
+				age:              getAge(r2.Intn(100)),
+			}
+		}
+	}
+}
+
+func (p *populationType) logPopulation() {
+	filePopulationDescr, err := os.Create("population.csv")
+	checkError("Cannot create file", err)
+	defer filePopulationDescr.Close()
+
+	populationLog := csv.NewWriter(filePopulationDescr)
+	defer populationLog.Flush()
+	line := []string{"ID", "Age", "Days", "Hospitality", "Self-Isolated", "Sickness severity", "State"}
+	populationLog.Write(line)
+
+	for i := 0; i < populationSpaceDimension; i++ {
+		for j := 0; j < populationSpaceDimension; j++ {
+			line := []string{
+				fmt.Sprintf("[%v, %v]", i, j),
+				fmt.Sprintf("%v", p[i][j].age),
+				fmt.Sprintf("%v", p[i][j].daysInState),
+				fmt.Sprintf("%v", p[i][j].hospitality),
+				fmt.Sprintf("%v", p[i][j].selfIsolated),
+				fmt.Sprintf("%v", p[i][j].sicknessSeverity),
+				fmt.Sprintf("%v", p[i][j].state),
+			}
+			populationLog.Write(line)
+		}
+	}
+
+}
+
 func checkError(message string, err error) {
 	if err != nil {
 		log.Fatal(message, err)
@@ -200,6 +273,46 @@ func removeSick(pArray []personID, index int) []personID {
 	}
 
 	return pArray
+}
+
+func getAge(rnd int) (age int) {
+	// var ageGroups = [5]int{9, 39, 49, 59, 69, 79, 100}
+	// var ageGroupsDensity = [5]int{3, 16, 48, 87, 100}
+
+	s1 := rand.NewSource(time.Now().UnixNano())
+	// r1 := rand.New(s1)
+	r2 := rand.New(s1)
+
+	// rnd := r1.Intn(100)
+	if rnd <= mainParameters.ageGroupsDensity[0].density {
+		age = r2.Intn(mainParameters.ageGroupsDensity[0].upperBound)
+	} else {
+		for idx, val := range mainParameters.ageGroupsDensity {
+			if rnd <= val.density {
+				age = r2.Intn(mainParameters.ageGroupsDensity[idx].upperBound-mainParameters.ageGroupsDensity[idx-1].upperBound) + mainParameters.ageGroupsDensity[idx-1].upperBound
+				break
+			}
+		}
+	}
+
+	// switch {
+	// case rnd <= ageGroupsDensity[0]:
+	// 	age = r2.Intn(ageGroups[0])
+	// 	// uniformSingleDistr[age]++
+	// case rnd <= ageGroupsDensity[1]:
+	// 	age = r2.Intn(ageGroups[1]-ageGroups[0]) + ageGroups[0]
+	// 	// uniformSingleDistr[age]++
+	// case rnd <= ageGroupsDensity[2]:
+	// 	age = r2.Intn(ageGroups[2]-ageGroups[1]) + ageGroups[1]
+	// 	// uniformSingleDistr[age]++
+	// case rnd <= ageGroupsDensity[3]:
+	// 	age = r2.Intn(ageGroups[3]-ageGroups[2]) + ageGroups[2]
+	// 	// uniformSingleDistr[age]++
+	// default:
+	// 	age = r2.Intn(ageGroups[4]-ageGroups[3]) + ageGroups[3]
+	// 	// uniformSingleDistr[age]++
+	// }
+	return
 }
 
 func main() {
@@ -230,30 +343,26 @@ func main() {
 	mainParameters.mortalityAmongAgeGroups[79] = 8.0
 	mainParameters.mortalityAmongAgeGroups[99] = 14.8
 
+	mainParameters.ageGroupsDensity[0] = ageGroupsDensityParameters{10, 3}
+	mainParameters.ageGroupsDensity[1] = ageGroupsDensityParameters{25, 16}
+	mainParameters.ageGroupsDensity[2] = ageGroupsDensityParameters{40, 48}
+	mainParameters.ageGroupsDensity[3] = ageGroupsDensityParameters{75, 87}
+	mainParameters.ageGroupsDensity[4] = ageGroupsDensityParameters{100, 100}
+
 	readJSON("config.json", &mainParameters)
 
 	//FIXME: find out how to set a range dynamically
 	// const count = int(math.Floor(math.Sqrt(float64(mainParameters.TotalPopulation))))
 
-	file, err := os.Create("result.csv")
-	checkError("Cannot create file", err)
-	defer file.Close()
-
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
 	//initialize
 	s1 := rand.NewSource(time.Now().UnixNano())
 	r1 := rand.New(s1)
+	// r2 := rand.New(s1)
 
 	var population populationType
 	globalStats = globalStatsStruct{}
 
-	for i := 0; i < populationSpaceDimension; i++ {
-		for j := 0; j < populationSpaceDimension; j++ {
-			population[i][j] = citizen{state: personState.Healthy, personID: personID{i, j}, hospitality: r1.Intn(100) + 50, sicknessSeverity: r1.Intn(4)}
-		}
-	}
+	population.initialize()
 
 	mainParameters.TotalPopulation = populationSpaceDimension * populationSpaceDimension
 
@@ -273,7 +382,14 @@ func main() {
 	globalStats.totalIll++
 	globalStats.totalIntact--
 
-	writer.Write([]string{"Day", "Dead", "Ill", "Infected", "Recovered", "Healthcare capacity", "Current mortality rate", "Self-isolated"})
+	file, err := os.Create("result.csv")
+	checkError("Cannot create file", err)
+	defer file.Close()
+
+	dailyProgressLog := csv.NewWriter(file)
+	defer dailyProgressLog.Flush()
+
+	dailyProgressLog.Write([]string{"Day", "Dead", "Ill", "Infected", "Recovered", "Healthcare capacity", "Current mortality rate", "Self-isolated"})
 	line := []string{
 		fmt.Sprintf("%v", globalStats.daysCount),
 		fmt.Sprintf("%v", globalStats.totalDead),
@@ -284,17 +400,28 @@ func main() {
 		fmt.Sprintf("%v", globalStats.currentMortality),
 		fmt.Sprintf("%v", globalStats.totalSelfIsolated),
 	}
-	writer.Write(line)
+	dailyProgressLog.Write(line)
 
-	var totalQuarantineAppliedOnPreviousDay = false
+	yearsPassed := 0
+
+	var totalQuarantineAppliedAppliedOnPreviousDay = false
 
 	// step over
 	for globalStats.totalInfected+globalStats.totalIll > 0 {
 
-		globalStats.daysCount++
+		if globalStats.daysCount/365 > yearsPassed {
+			yearsPassed++
+			//update population age
+			fmt.Printf("Year %v passed\n", yearsPassed)
+			population.growAYear()
+		}
 
+		globalStats.daysCount++
+		population.tickNextDay()
+
+		// TODO: healthcare
 		if globalStats.totalInfected >= mainParameters.HealthcareCapacity {
-			globalStats.currentMortality = 2 * mainParameters.MortalityRate
+			globalStats.currentMortality = mainParameters.MortalityRate * 2
 		} else {
 			globalStats.currentMortality = mainParameters.MortalityRate
 		}
@@ -309,7 +436,9 @@ func main() {
 		for index, element := range pArrayOfSick {
 			//1. take a person
 			person := &population[element[0]][element[1]]
-			person.daysInState++
+
+			// FIXME: days in state must be calculated for all citizens
+			// person.daysInState++
 
 			if enableDebugMessages {
 				fmt.Printf("Person [%v] already %v days in state %v\n", person.personID, person.daysInState, person.state)
@@ -329,7 +458,7 @@ func main() {
 				}
 			default:
 				switch {
-				case globalStats.totalQuarantine:
+				case globalStats.totalQuarantineApplied:
 					//if total strict quarantine applied: no contacts allowed
 					break
 				case person.selfIsolated && (r1.Intn(100) <= mainParameters.SelfIsolationStrictness):
@@ -341,6 +470,11 @@ func main() {
 				neighboursArray := population.getContacted(*person, mainParameters.MaximumTravelRange, mainParameters.MaximumContactsPerDay)
 				for _, contactElement := range neighboursArray {
 					contact := &population[contactElement[0]][contactElement[1]]
+
+					if contact.selfIsolated && (r1.Intn(100) <= mainParameters.SelfIsolationStrictness) {
+						break
+					}
+
 					switch contact.state {
 					//3. calculate a chance to infect each of them
 					//3.1 leave recovered and dead intact
@@ -467,14 +601,14 @@ func main() {
 			}
 		}
 
-		globalStats.totalQuarantine = (((globalStats.totalIll + globalStats.totalDead) * 100 / mainParameters.TotalPopulation) > mainParameters.TotalQuarantineTreshold)
+		globalStats.totalQuarantineApplied = (((globalStats.totalIll + globalStats.totalDead) * 100 / mainParameters.TotalPopulation) > mainParameters.TotalQuarantineAppliedTreshold)
 
 		switch {
-		case globalStats.totalQuarantine && !totalQuarantineAppliedOnPreviousDay:
-			totalQuarantineAppliedOnPreviousDay = true
+		case globalStats.totalQuarantineApplied && !totalQuarantineAppliedAppliedOnPreviousDay:
+			totalQuarantineAppliedAppliedOnPreviousDay = true
 			fmt.Printf("Day %v. Total quarantine applied\n", globalStats.daysCount)
-		case !globalStats.totalQuarantine && totalQuarantineAppliedOnPreviousDay:
-			totalQuarantineAppliedOnPreviousDay = false
+		case !globalStats.totalQuarantineApplied && totalQuarantineAppliedAppliedOnPreviousDay:
+			totalQuarantineAppliedAppliedOnPreviousDay = false
 			fmt.Printf("Day %v. Total quarantine dismissed\n", globalStats.daysCount)
 		}
 
@@ -488,9 +622,12 @@ func main() {
 			fmt.Sprintf("%v", globalStats.currentMortality),
 			fmt.Sprintf("%v", globalStats.totalSelfIsolated),
 		}
-		writer.Write(line)
+		dailyProgressLog.Write(line)
 
 	}
+
+	population.logPopulation()
+
 	fmt.Println(globalStats)
 	fmt.Println("End of sumilation")
 }
