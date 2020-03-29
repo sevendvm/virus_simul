@@ -106,7 +106,7 @@ type citizen struct {
 	personID              //person's Digital Passport :)
 }
 
-const populationSpaceDimension = 500
+const populationSpaceDimension = 50
 
 type populationType [populationSpaceDimension][populationSpaceDimension]citizen
 
@@ -173,7 +173,9 @@ func (p *populationType) getContacted(referencePerson citizen, radius, maximumCo
 	}
 
 	//pick "maximum" number of points as a result
-	candidatesToBePicked := maximumContacts
+	candidatesToBePicked := int(float64(maximumContacts) * mainParameters.contactsPerDayModifiers[referencePerson.state])
+
+	// fmt.Printf("%v of %v candidates picked due to %v state %v limit\n", candidatesToBePicked, maximumContacts, mainParameters.contactsPerDayModifiers[referencePerson.state], referencePerson.state)
 
 	s1 := rand.NewSource(time.Now().UnixNano())
 	r1 := rand.New(s1)
@@ -389,13 +391,15 @@ func main() {
 	dailyProgressLog := csv.NewWriter(file)
 	defer dailyProgressLog.Flush()
 
-	dailyProgressLog.Write([]string{"Day", "Dead", "Ill", "Infected", "Recovered", "Healthcare capacity", "Current mortality rate", "Self-isolated"})
+	dailyProgressLog.Write([]string{"Day", "Dead", "Ill", "Infected", "Recovered", "Hospitalized", "On ICU", "Healthcare capacity", "Current mortality rate", "Self-isolated"})
 	line := []string{
 		fmt.Sprintf("%v", globalStats.daysCount),
 		fmt.Sprintf("%v", globalStats.totalDead),
 		fmt.Sprintf("%v", globalStats.totalIll),
 		fmt.Sprintf("%v", globalStats.totalInfected),
 		fmt.Sprintf("%v", globalStats.totalRecovered),
+		fmt.Sprintf("%v", globalStats.totalHospitalized),
+		fmt.Sprintf("%v", globalStats.totalICU),
 		fmt.Sprintf("%v", mainParameters.HealthcareCapacity),
 		fmt.Sprintf("%v", globalStats.currentMortality),
 		fmt.Sprintf("%v", globalStats.totalSelfIsolated),
