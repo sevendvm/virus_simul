@@ -6,3 +6,5 @@
 .vscode
 result.csv
 visual.xlsx
+*.csv
+*.xlsx
