@@ -278,7 +278,7 @@ func removeSick(pArray []personID, index int) []personID {
 }
 
 func getAge(rnd int) (age int) {
-	// var ageGroups = [5]int{9, 39, 49, 59, 69, 79, 100}
+	// var ageGroups = [5]int{10, 25, 40, 75, 100}
 	// var ageGroupsDensity = [5]int{3, 16, 48, 87, 100}
 
 	s1 := rand.NewSource(time.Now().UnixNano())
